@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backoffice — Orders</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      #conn-indicator {
+        font-size: 0.8rem;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #475569;
+      }
+      .dot.connected {
+        background: #22c55e;
+      }
+      .dot.disconnected {
+        background: #ef4444;
+      }
+
+      #empty {
+        text-align: center;
+        color: #475569;
+        margin-top: 6rem;
+        font-size: 1rem;
+      }
+
+      #order-list {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      }
+
+      .order-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 1.2rem 1.4rem;
+        animation: pop 0.25s ease;
+      }
+      @keyframes pop {
+        from {
+          transform: scale(0.9);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .order-card .item-name {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        margin-bottom: 0.3rem;
+      }
+      .order-card .qty {
+        font-size: 0.9rem;
+        color: #94a3b8;
+      }
+      .order-card .time {
+        font-size: 0.75rem;
+        color: #475569;
+        margin-top: 0.6rem;
+      }
+
+      #clear-btn {
+        margin-top: 2rem;
+        padding: 0.5rem 1.2rem;
+        background: transparent;
+        border: 1px solid #334155;
+        color: #94a3b8;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition:
+          border-color 0.2s,
+          color 0.2s;
+      }
+      #clear-btn:hover {
+        border-color: #ef4444;
+        color: #ef4444;
+      }
+      #counter {
+        color: #94a3b8;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>🧾 Backoffice — Live Orders</h1>
+        <span id="counter">0 orders received</span>
+      </div>
+      <div id="conn-indicator">
+        <span class="dot disconnected" id="dot"></span>
+        <span id="conn-label">Connecting…</span>
+      </div>
+    </header>
+
+    <div id="empty">Waiting for orders…</div>
+    <div id="order-list"></div>
+    <button id="clear-btn" style="display: none">Clear all</button>
+
+    <script>
+      // Connect as 'backoffice' role — server will enter_room(sid, 'backoffice')
+      const socket = io("http://localhost:8000", {
+        query: { role: "backoffice" },
+        transports: ["websocket"],
+      });
+
+      const dot = document.getElementById("dot");
+      const connLabel = document.getElementById("conn-label");
+      const list = document.getElementById("order-list");
+      const empty = document.getElementById("empty");
+      const counter = document.getElementById("counter");
+      const clearBtn = document.getElementById("clear-btn");
+
+      let orderCount = 0;
+
+      // --- Connection state ---
+      socket.on("connect", () => {
+        dot.className = "dot connected";
+        connLabel.textContent = "Connected (sid: " + socket.id + ")";
+      });
+
+      socket.on("disconnect", () => {
+        dot.className = "dot disconnected";
+        connLabel.textContent = "Disconnected";
+      });
+
+      // --- Receive new order ---
+      socket.on("new_order", (data) => {
+        orderCount++;
+
+        // Hide empty state
+        empty.style.display = "none";
+        clearBtn.style.display = "inline-block";
+        counter.textContent =
+          orderCount + " order" + (orderCount !== 1 ? "s" : "") + " received";
+
+        // Build card
+        const card = document.createElement("div");
+        card.className = "order-card";
+
+        const now = new Date().toLocaleTimeString();
+        card.innerHTML = `
+        <div class="item-name">${escapeHtml(data.item)}</div>
+        <div class="qty">Qty: <strong>${parseInt(data.quantity, 10)}</strong></div>
+        <div class="time">${now}</div>
+      `;
+
+        // Newest first
+        list.prepend(card);
+      });
+
+      // --- Clear board ---
+      clearBtn.addEventListener("click", () => {
+        list.innerHTML = "";
+        orderCount = 0;
+        counter.textContent = "0 orders received";
+        empty.style.display = "block";
+        clearBtn.style.display = "none";
+      });
+
+      // Prevent XSS from server data
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    </script>
+  </body>
+</html>

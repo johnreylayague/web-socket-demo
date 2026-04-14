@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Order — Frontend</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 2rem;
+      width: 360px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.1);
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 1.5rem; color: #111; }
+    label { display: block; font-size: .85rem; color: #555; margin-bottom: .4rem; }
+    select, input[type="number"] {
+      width: 100%;
+      padding: .6rem .8rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      background: #fafafa;
+    }
+    button {
+      width: 100%;
+      padding: .75rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #93c5fd; cursor: not-allowed; }
+    #status {
+      margin-top: 1rem;
+      padding: .6rem .8rem;
+      border-radius: 8px;
+      font-size: .85rem;
+      display: none;
+    }
+    #status.success { background: #d1fae5; color: #065f46; display: block; }
+    #status.error   { background: #fee2e2; color: #991b1b; display: block; }
+    #conn-indicator {
+      font-size: .75rem;
+      color: #6b7280;
+      margin-bottom: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+    }
+    .dot.connected { background: #22c55e; }
+    .dot.disconnected { background: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🍔 Place an Order</h1>
+
+    <div id="conn-indicator">
+      <span class="dot disconnected" id="dot"></span>
+      <span id="conn-label">Connecting…</span>
+    </div>
+
+    <label for="item">Item</label>
+    <select id="item">
+      <option value="Burger">Burger</option>
+      <option value="Fries">Fries</option>
+      <option value="Drink">Drink</option>
+      <option value="Pizza">Pizza</option>
+      <option value="Salad">Salad</option>
+    </select>
+
+    <label for="quantity">Quantity</label>
+    <input type="number" id="quantity" value="1" min="1" max="99" />
+
+    <button id="order-btn" disabled>Place Order</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    // Connect as 'frontend' role so server does NOT put us in backoffice room
+    const socket = io("http://localhost:8000", {
+      query: { role: "frontend" },
+      transports: ["websocket"],   // skip polling, go straight to WS
+    });
+
+    const dot       = document.getElementById("dot");
+    const connLabel = document.getElementById("conn-label");
+    const btn       = document.getElementById("order-btn");
+    const status    = document.getElementById("status");
+
+    // --- Connection state ---
+    socket.on("connect", () => {
+      dot.className = "dot connected";
+      connLabel.textContent = "Connected (sid: " + socket.id + ")";
+      btn.disabled = false;
+    });
+
+    socket.on("disconnect", () => {
+      dot.className = "dot disconnected";
+      connLabel.textContent = "Disconnected";
+      btn.disabled = true;
+    });
+
+    // --- Place order ---
+    btn.addEventListener("click", () => {
+      const item     = document.getElementById("item").value;
+      const quantity = parseInt(document.getElementById("quantity").value, 10);
+
+      if (!item || quantity < 1) return;
+
+      socket.emit("place_order", { item, quantity });
+      
+      status.className = "success";
+      status.textContent = `✅ Order sent: ${quantity}x ${item}`;
+
+      // Reset after 2.5 s
+      setTimeout(() => { status.className = ""; status.textContent = ""; }, 2500);
+    });
+  </script>
+</body>
+</html>
